@@ -1,0 +1,289 @@
+Para una aplicación de gestión de contactos, es esencial combinar el manejo de la base de datos con una interfaz de usuario intuitiva que permita a los usuarios interactuar con los datos. Aquí te presento un ejemplo completo que incluye la vista de diseño y la lógica en Java para insertar, buscar, actualizar y eliminar contactos.
+
+-----
+
+## 1\. Archivo de Diseño `activity_main.xml`
+
+Este diseño contiene los campos de texto (`EditText`) para ingresar los datos del contacto (nombre, apellido, teléfono, correo) y botones para realizar las operaciones CRUD. Se utiliza un `LinearLayout` para organizar los elementos verticalmente.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Gestión de Contactos"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="24dp" />
+
+    <EditText
+        android:id="@+id/et_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="ID del contacto (para buscar, actualizar o eliminar)"
+        android:inputType="number" />
+
+    <EditText
+        android:id="@+id/et_nombre"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Nombre" />
+
+    <EditText
+        android:id="@+id/et_apellido"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Apellido" />
+
+    <EditText
+        android:id="@+id/et_telefono"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Teléfono"
+        android:inputType="phone" />
+
+    <EditText
+        android:id="@+id/et_email"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Correo Electrónico"
+        android:inputType="textEmailAddress" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="24dp">
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="registrar"
+            android:text="Guardar" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="buscar"
+            android:text="Buscar" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="modificar"
+            android:text="Modificar" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="eliminar"
+            android:text="Eliminar" />
+    </LinearLayout>
+
+</LinearLayout>
+```
+
+-----
+
+## 2\. Clase `AdminSQLiteOpenHelper.java`
+
+Esta clase se encarga de la creación y gestión de la base de datos. Se actualiza para incluir las columnas de apellido y correo electrónico.
+
+```java
+import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+
+public class AdminSQLiteOpenHelper extends SQLiteOpenHelper {
+
+    private static final String DATABASE_NAME = "agenda.db";
+    private static final int DATABASE_VERSION = 1;
+    
+    // Sentencia SQL para crear la tabla de contactos
+    private static final String CREATE_TABLE_CONTACTOS =
+            "CREATE TABLE contactos (id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "nombre TEXT, apellido TEXT, telefono TEXT, email TEXT)";
+
+    public AdminSQLiteOpenHelper(Context context) {
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+    }
+
+    @Override
+    public void onCreate(SQLiteDatabase db) {
+        db.execSQL(CREATE_TABLE_CONTACTOS);
+    }
+
+    @Override
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        db.execSQL("DROP TABLE IF EXISTS contactos");
+        onCreate(db);
+    }
+}
+```
+
+-----
+
+## 3\. Lógica de la Actividad `MainActivity.java`
+
+Aquí se implementan los métodos para cada botón de la interfaz de usuario, conectando las vistas con las operaciones de la base de datos.
+
+```java
+package com.ejemplo.tuaplicacion;
+
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+
+    private EditText et_id, et_nombre, et_apellido, et_telefono, et_email;
+    private AdminSQLiteOpenHelper admin;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        //admin = new AdminSQLiteOpenHelper(this);
+
+        et_id = findViewById(R.id.et_id);
+        et_nombre = findViewById(R.id.et_nombre);
+        et_apellido = findViewById(R.id.et_apellido);
+        et_telefono = findViewById(R.id.et_telefono);
+        et_email = findViewById(R.id.et_email);
+        
+        admin = new AdminSQLiteOpenHelper(this);
+    }
+
+    // Método para Inserción (Botón "Guardar")
+    public void registrar(View view) {
+        SQLiteDatabase db = admin.getWritableDatabase();
+        String nombre = et_nombre.getText().toString();
+        String apellido = et_apellido.getText().toString();
+        String telefono = et_telefono.getText().toString();
+        String email = et_email.getText().toString();
+
+        if (!nombre.isEmpty() && !apellido.isEmpty() && !telefono.isEmpty() && !email.isEmpty()) {
+            ContentValues registro = new ContentValues();
+            registro.put("nombre", nombre);
+            registro.put("apellido", apellido);
+            registro.put("telefono", telefono);
+            registro.put("email", email);
+            
+            db.insert("contactos", null, registro);
+            db.close();
+
+            limpiarCampos();
+            Toast.makeText(this, "Contacto guardado exitosamente", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Debes llenar todos los campos", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Método para Consulta (Botón "Buscar")
+    public void buscar(View view) {
+        SQLiteDatabase db = admin.getReadableDatabase();
+        String id = et_id.getText().toString();
+
+        if (!id.isEmpty()) {
+            Cursor fila = db.rawQuery(
+                    "SELECT nombre, apellido, telefono, email FROM contactos WHERE id =" + id, null);
+
+            if (fila.moveToFirst()) {
+                et_nombre.setText(fila.getString(0));
+                et_apellido.setText(fila.getString(1));
+                et_telefono.setText(fila.getString(2));
+                et_email.setText(fila.getString(3));
+            } else {
+                Toast.makeText(this, "El contacto no existe", Toast.LENGTH_SHORT).show();
+                limpiarCampos();
+            }
+            db.close();
+        } else {
+            Toast.makeText(this, "Debes ingresar un ID para buscar", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Método para Actualización (Botón "Modificar")
+    public void modificar(View view) {
+        SQLiteDatabase db = admin.getWritableDatabase();
+        String id = et_id.getText().toString();
+        String nombre = et_nombre.getText().toString();
+        String apellido = et_apellido.getText().toString();
+        String telefono = et_telefono.getText().toString();
+        String email = et_email.getText().toString();
+
+        if (!id.isEmpty() && !nombre.isEmpty() && !apellido.isEmpty() && !telefono.isEmpty() && !email.isEmpty()) {
+            ContentValues registro = new ContentValues();
+            registro.put("nombre", nombre);
+            registro.put("apellido", apellido);
+            registro.put("telefono", telefono);
+            registro.put("email", email);
+
+            int cantidad = db.update("contactos", registro, "id=" + id, null);
+            db.close();
+
+            if (cantidad == 1) {
+                Toast.makeText(this, "Contacto modificado exitosamente", Toast.LENGTH_SHORT).show();
+                limpiarCampos();
+            } else {
+                Toast.makeText(this, "El contacto no existe", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "Debes llenar todos los campos", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Método para Eliminación (Botón "Eliminar")
+    public void eliminar(View view) {
+        SQLiteDatabase db = admin.getWritableDatabase();
+        String id = et_id.getText().toString();
+
+        if (!id.isEmpty()) {
+            int cantidad = db.delete("contactos", "id=" + id, null);
+            db.close();
+
+            if (cantidad == 1) {
+                Toast.makeText(this, "Contacto eliminado exitosamente", Toast.LENGTH_SHORT).show();
+                limpiarCampos();
+            } else {
+                Toast.makeText(this, "El contacto no existe", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "Debes ingresar un ID para eliminar", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    // Método auxiliar para limpiar los campos de texto
+    private void limpiarCampos() {
+        et_id.setText("");
+        et_nombre.setText("");
+        et_apellido.setText("");
+        et_telefono.setText("");
+        et_email.setText("");
+    }
+}
+```
+
+
+---
+
+## 🚀 Acceso e Inspección con Database Inspector
+
+Poner comentario a la instrucción 
+//db.close();

@@ -1,0 +1,429 @@
+Para gestionar los datos de **nombre, apellido, correo electrónico y teléfono**, usaremos un enfoque más robusto que un archivo de texto plano: guardaremos cada registro como una **línea de texto** separada por un delimitador (como el pipe `|`) dentro de un único archivo de memoria interna.
+
+A continuación, se detalla un ejemplo completo que integra la lógica de manejo de ficheros con una interfaz de usuario básica (`Activity`) para realizar las cuatro operaciones **CRUD** (Crear, Leer, Actualizar, Eliminar).
+
+-----
+
+## 1\. Estructura de Datos (Clase `Registro`)
+
+Primero, definimos un objeto simple en Java para modelar los datos.
+
+```java
+// Clase: Registro.java
+public class Registro {
+    public String nombre;
+    public String apellido;
+    public String email; // Usaremos el email como ID único para buscar y actualizar.
+    public String telefono;
+
+    public Registro(String nombre, String apellido, String email, String telefono) {
+        this.nombre = nombre;
+        this.apellido = apellido;
+        this.email = email;
+        this.telefono = telefono;
+    }
+
+    /**
+     * Convierte el objeto a una línea de texto para guardarla en el archivo.
+     * Usamos '|' como delimitador.
+     */
+    public String toFileString() {
+        return nombre + "|" + apellido + "|" + email + "|" + telefono;
+    }
+
+    /**
+     * Crea un objeto Registro a partir de una línea de texto del archivo.
+     */
+    public static Registro fromFileString(String line) {
+        String[] parts = line.split("\\|"); // Usamos \\| para escapar el caracter '|'
+        if (parts.length == 4) {
+            return new Registro(parts[0], parts[1], parts[2], parts[3]);
+        }
+        return null;
+    }
+}
+```
+
+-----
+
+## 2\. Lógica de Manejo de Ficheros (Clase `FileHelper`)
+
+Esta clase encapsulará toda la lógica de lectura y escritura para el archivo `datos_registro.txt` en la memoria interna.
+
+```java
+// Clase: FileHelper.java
+import android.content.Context;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class FileHelper {
+    private static final String FILENAME = "datos_registro.txt";
+    private final Context context;
+
+    public FileHelper(Context context) {
+        this.context = context;
+    }
+
+    // =================================================================
+    // LECTURA (READ)
+    // =================================================================
+
+    /**
+     * Lee todos los registros del archivo y los devuelve como una lista de objetos.
+     */
+    public List<Registro> leerTodosLosRegistros() {
+        List<Registro> registros = new ArrayList<>();
+        try (FileInputStream fis = context.openFileInput(FILENAME);
+             InputStreamReader isr = new InputStreamReader(fis);
+             BufferedReader br = new BufferedReader(isr)) {
+
+            String line;
+            while ((line = br.readLine()) != null) {
+                Registro reg = Registro.fromFileString(line);
+                if (reg != null) {
+                    registros.add(reg);
+                }
+            }
+        } catch (FileNotFoundException e) {
+            // No pasa nada, el archivo aún no existe. Devolvemos lista vacía.
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return registros;
+    }
+
+    // =================================================================
+    // ESCRITURA Y CRUD
+    // =================================================================
+
+    /**
+     * Escribe la lista completa de registros de vuelta al archivo, sobrescribiendo el contenido.
+     */
+    private void sobrescribirArchivo(List<Registro> registros) throws IOException {
+        // Usamos Context.MODE_PRIVATE, que sobrescribe el archivo existente.
+        try (FileOutputStream fos = context.openFileOutput(FILENAME, Context.MODE_PRIVATE)) {
+            for (Registro reg : registros) {
+                String line = reg.toFileString() + "\n";
+                fos.write(line.getBytes());
+            }
+        }
+    }
+
+    /**
+     * CREAR (CREATE): Agrega un nuevo registro.
+     */
+    public boolean agregarRegistro(Registro nuevoRegistro) {
+        List<Registro> registros = leerTodosLosRegistros();
+        // Evitamos duplicados: usamos el email como ID único.
+        for (Registro reg : registros) {
+            if (reg.email.equalsIgnoreCase(nuevoRegistro.email)) {
+                return false; // El registro ya existe
+            }
+        }
+
+        registros.add(nuevoRegistro);
+        try {
+            sobrescribirArchivo(registros);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * CONSULTAR/LEER (READ - Específico): Busca un registro por email.
+     */
+    public Registro buscarRegistro(String email) {
+        List<Registro> registros = leerTodosLosRegistros();
+        for (Registro reg : registros) {
+            if (reg.email.equalsIgnoreCase(email)) {
+                return reg;
+            }
+        }
+        return null; // No encontrado
+    }
+
+    /**
+     * ACTUALIZAR (UPDATE): Busca un registro por email y lo reemplaza con el nuevo.
+     */
+    public boolean actualizarRegistro(Registro registroActualizado) {
+        List<Registro> registros = leerTodosLosRegistros();
+        boolean encontrado = false;
+
+        for (int i = 0; i < registros.size(); i++) {
+            if (registros.get(i).email.equalsIgnoreCase(registroActualizado.email)) {
+                registros.set(i, registroActualizado); // Reemplazar
+                encontrado = true;
+                break;
+            }
+        }
+
+        if (encontrado) {
+            try {
+                sobrescribirArchivo(registros);
+                return true;
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return false; // No encontrado para actualizar
+    }
+
+    /**
+     * ELIMINAR (DELETE): Busca un registro por email y lo elimina.
+     */
+    public boolean eliminarRegistro(String email) {
+        List<Registro> registros = leerTodosLosRegistros();
+        boolean eliminado = registros.removeIf(reg -> reg.email.equalsIgnoreCase(email));
+
+        if (eliminado) {
+            try {
+                sobrescribirArchivo(registros);
+                return true;
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return false; // No encontrado para eliminar
+    }
+}
+```
+
+-----
+
+## 3\. Interfaz de Usuario (XML)
+
+Este es un *layout* básico (`activity_main.xml`) con campos de texto y botones para las operaciones.
+
+```xml
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Gestión de Registros (CRUD en Fichero Interno)"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="10dp"/>
+
+    <EditText
+        android:id="@+id/et_email"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Correo Electrónico (ID Único)"
+        android:inputType="textEmailAddress" />
+
+    <EditText
+        android:id="@+id/et_nombre"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Nombre" />
+
+    <EditText
+        android:id="@+id/et_apellido"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Apellido" />
+
+    <EditText
+        android:id="@+id/et_telefono"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Teléfono"
+        android:inputType="phone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp">
+        <Button android:id="@+id/btn_guardar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Guardar (C)" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_buscar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Buscar (R)" android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button android:id="@+id/btn_actualizar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Actualizar (U)" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_eliminar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Eliminar (D)" android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_resultado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textSize="16sp"
+        android:textStyle="italic"
+        android:text="Resultado:"/>
+
+</LinearLayout>
+```
+
+-----
+
+## 4\. Lógica de la `Activity` (Java)
+
+Finalmente, implementamos la lógica en la actividad principal para manejar los eventos de los botones, interactuando con la clase `FileHelper`.
+
+```java
+// Clase: MainActivity.java
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class MainActivity extends AppCompatActivity {
+
+    private EditText etNombre, etApellido, etEmail, etTelefono;
+    private TextView tvResultado;
+    private FileHelper fileHelper;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Inicializar FileHelper
+        fileHelper = new FileHelper(this);
+
+        // Referencias a la UI
+        etNombre = findViewById(R.id.et_nombre);
+        etApellido = findViewById(R.id.et_apellido);
+        etEmail = findViewById(R.id.et_email);
+        etTelefono = findViewById(R.id.et_telefono);
+        tvResultado = findViewById(R.id.tv_resultado);
+
+        // Configuración de los botones
+        findViewById(R.id.btn_guardar).setOnClickListener(v -> guardarRegistro());
+        findViewById(R.id.btn_buscar).setOnClickListener(v -> buscarRegistro());
+        findViewById(R.id.btn_actualizar).setOnClickListener(v -> actualizarRegistro());
+        findViewById(R.id.btn_eliminar).setOnClickListener(v -> eliminarRegistro());
+
+        mostrarTodosLosRegistros(); // Muestra el estado inicial al cargar.
+    }
+
+    /** Recolecta los datos de los EditText para crear un objeto Registro. */
+    private Registro getRegistroFromFields() {
+        String nombre = etNombre.getText().toString().trim();
+        String apellido = etApellido.getText().toString().trim();
+        String email = etEmail.getText().toString().trim();
+        String telefono = etTelefono.getText().toString().trim();
+
+        if (email.isEmpty()) {
+            Toast.makeText(this, "El Correo Electrónico es obligatorio (es el ID)", Toast.LENGTH_SHORT).show();
+            return null;
+        }
+        return new Registro(nombre, apellido, email, telefono);
+    }
+
+    // ================= CRUD IMPLEMENTATION =================
+
+    // CREATE
+    private void guardarRegistro() {
+        Registro nuevoReg = getRegistroFromFields();
+        if (nuevoReg == null) return;
+
+        if (fileHelper.agregarRegistro(nuevoReg)) {
+            Toast.makeText(this, "✅ Registro Guardado", Toast.LENGTH_SHORT).show();
+            limpiarCampos();
+            mostrarTodosLosRegistros();
+        } else {
+            Toast.makeText(this, "❌ Error: El Email ya existe o falló la escritura.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // READ
+    private void buscarRegistro() {
+        String email = etEmail.getText().toString().trim();
+        if (email.isEmpty()) {
+            Toast.makeText(this, "Ingrese el Email para buscar.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Registro reg = fileHelper.buscarRegistro(email);
+        if (reg != null) {
+            // Rellenar campos con el registro encontrado
+            etNombre.setText(reg.nombre);
+            etApellido.setText(reg.apellido);
+            etTelefono.setText(reg.telefono);
+            tvResultado.setText("Resultado: Registro de " + reg.nombre + " encontrado.");
+        } else {
+            Toast.makeText(this, "❌ Registro no encontrado.", Toast.LENGTH_SHORT).show();
+            tvResultado.setText("Resultado: Registro no encontrado.");
+            // Opcional: limpiar campos no-ID
+            etNombre.setText("");
+            etApellido.setText("");
+            etTelefono.setText("");
+        }
+    }
+
+    // UPDATE
+    private void actualizarRegistro() {
+        Registro regActualizado = getRegistroFromFields();
+        if (regActualizado == null) return;
+
+        if (fileHelper.actualizarRegistro(regActualizado)) {
+            Toast.makeText(this, "🔃 Registro Actualizado", Toast.LENGTH_SHORT).show();
+            limpiarCampos();
+            mostrarTodosLosRegistros();
+        } else {
+            Toast.makeText(this, "❌ Error: Registro no encontrado para actualizar.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // DELETE
+    private void eliminarRegistro() {
+        String email = etEmail.getText().toString().trim();
+        if (email.isEmpty()) {
+            Toast.makeText(this, "Ingrese el Email para eliminar.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (fileHelper.eliminarRegistro(email)) {
+            Toast.makeText(this, "🗑️ Registro Eliminado", Toast.LENGTH_SHORT).show();
+            limpiarCampos();
+            mostrarTodosLosRegistros();
+        } else {
+            Toast.makeText(this, "❌ Error: Registro no encontrado para eliminar.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // ================= UTILITIES =================
+
+    /** Muestra todos los registros actuales en el TextView de resultado. */
+    private void mostrarTodosLosRegistros() {
+        List<Registro> registros = fileHelper.leerTodosLosRegistros();
+        StringBuilder sb = new StringBuilder("Registros Actuales:\n");
+
+        if (registros.isEmpty()) {
+            sb.append("No hay registros almacenados.");
+        } else {
+            for (Registro reg : registros) {
+                sb.append(" -> ").append(reg.email).append(" (").append(reg.nombre).append(")\n");
+            }
+        }
+        tvResultado.setText(sb.toString());
+    }
+
+    /** Limpia todos los campos de texto de la UI. */
+    private void limpiarCampos() {
+        etNombre.setText("");
+        etApellido.setText("");
+        etEmail.setText("");
+        etTelefono.setText("");
+    }
+}
+```

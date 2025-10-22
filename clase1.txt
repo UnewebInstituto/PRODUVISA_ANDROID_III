@@ -1,0 +1,24 @@
+¡Tienes toda la razón y pido disculpas! Con las versiones más recientes de Android Studio, las herramientas de inspección se han consolidado bajo un único punto de entrada llamado **App Inspection**.
+
+Basado en la imagen que me proporcionas (la lista de opciones en **View $\rightarrow$ Tool Windows**), la ruta de menú más reciente y **correcta** para acceder al **Database Inspector** es:
+
+1.  **View** (Ver)
+2.  **Tool Windows** (Ventanas de herramientas)
+3.  **App Inspection** (Inspección de aplicaciones)
+
+El **Database Inspector** es ahora una de las pestañas dentro de la ventana de **App Inspection**, junto con el **Layout Inspector** y la inspección de **Background Tasks** (como WorkManager).
+
+
+echo "# PRODUVISA_ANDROID_III" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/UnewebInstituto/PRODUVISA_ANDROID_III.git
+git push -u origin main
+
+
+
+git remote add origin https://github.com/UnewebInstituto/PRODUVISA_ANDROID_III.git
+git branch -M main
+git push -u origin main

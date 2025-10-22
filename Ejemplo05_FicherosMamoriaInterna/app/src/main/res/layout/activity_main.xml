@@ -1,0 +1,68 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Gestión de Registros (CRUD en Fichero Interno)"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="10dp"/>
+
+    <EditText
+        android:id="@+id/et_email"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Correo Electrónico (ID Único)"
+        android:inputType="textEmailAddress" />
+
+    <EditText
+        android:id="@+id/et_nombre"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Nombre" />
+
+    <EditText
+        android:id="@+id/et_apellido"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Apellido" />
+
+    <EditText
+        android:id="@+id/et_telefono"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Teléfono"
+        android:inputType="phone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp">
+        <Button android:id="@+id/btn_guardar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Guardar (C)" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_buscar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Buscar (R)" android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button android:id="@+id/btn_actualizar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Actualizar (U)" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_eliminar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Eliminar (D)" android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_resultado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textSize="16sp"
+        android:textStyle="italic"
+        android:text="Resultado:"/>
+
+</LinearLayout>
