@@ -1,0 +1,95 @@
+Veo la captura de pantalla y el error que ya habíamos discutido. Es genial tener el contexto visual. 👍
+
+El mensaje que ves, **"Invalid Gradle JDK configuration found. Undefined java.home..."**, es una advertencia crítica que te impide editar o depurar tu proyecto.
+
+La solución es **muy simple y está justo en las opciones que te ofrece Android Studio** en la parte inferior de la ventana.
+
+---
+
+## Solución Inmediata (Selección del JDK)
+
+Como experto en Android Studio, te recomiendo la opción más estable para un nuevo proyecto: **usar el JDK que ya viene incluido y probado por Google** con tu versión de Android Studio.
+
+### Opción Recomendada: Usar el JDK Integrado
+
+1.  **Haz clic** directamente en la opción azul:
+    > **Use Embedded JDK** (`C:\Program Files\Android\Android Studio\jbr`)
+
+Esta opción garantiza que estás usando el **Java Runtime Environment (JBR)** específico que Android Studio espera, evitando cualquier conflicto de rutas o versiones que puedas tener con JDKs externos como Liberica.
+
+### Alternativa: Usar un JDK Externo
+
+Si por alguna razón necesitas usar el JDK 21 que tienes instalado (BellSoft/LibericaJDK), simplemente haz clic en:
+> **Use JDK 21** (`C:/Program Files/BellSoft/LibericaJDK-21-Full`)
+
+---
+
+## Verificación y Sincronización
+
+Una vez que selecciones cualquiera de las dos opciones, Android Studio hará lo siguiente automáticamente:
+
+1.  **Actualizará la configuración interna** de Gradle para apuntar a la ruta de Java seleccionada.
+2.  **Ejecutará la sincronización de Gradle** (*Gradle Sync*).
+
+Una vez que la sincronización termine sin errores (lo verás en la pestaña `Build`), el proyecto se cargará correctamente y podrás empezar a editar y construir tu aplicación. ¡Deberías ver cómo desaparecen las advertencias y el código se ilumina!
+
+Si tienes que ir a la configuración manualmente, recuerda la ruta: `File` $\to$ `Settings` $\to$ `Build, Execution, Deployment` $\to$ `Build Tools` $\to$ **`Gradle`**.
+
+
+*************************************
+ERROR APP DE MARGIORIE
+
+Excelente, gracias por la imagen. Ahora estamos lidiando con un problema **después de que el build de Gradle finalizó exitosamente**, lo cual es una buena señal porque significa que el código compila bien.
+
+El error: **"Error running 'app' - The application could not be installed. Installation failed due to: 'Error code: 'UNKNOWN', message='Unknown failure:..."** indica que la aplicación se construyó correctamente (`Gradle build finished`), pero **falló al instalarse en el dispositivo o emulador**.
+
+Aunque el mensaje es genérico ("Unknown failure"), basándome en mi experiencia como experto en Android Studio y Java, las causas más comunes para este tipo de fallos de instalación son las siguientes:
+
+---
+
+## Causas Comunes del Fallo de Instalación
+
+Aquí te detallo las razones más frecuentes, de la más a la menos común:
+
+### 1. Problemas con el Dispositivo o Emulador
+
+* **Dispositivo No Autorizado (ADB):** Si estás usando un dispositivo físico, es muy común que no hayas autorizado la depuración USB.
+    * **Solución:** Desbloquea tu teléfono, conecta el cable USB y, cuando aparezca el cuadro de diálogo **"Allow USB debugging?"**, asegúrate de marcar "Always allow from this computer" y pulsa "OK".
+* **Espacio Insuficiente en el Dispositivo/Emulador:** El dispositivo no tiene suficiente espacio de almacenamiento para instalar la aplicación.
+    * **Solución:** Libera espacio en el dispositivo o emulador. En un emulador, puedes borrar los datos del emulador o crear uno nuevo.
+* **Emulador Corrupto o Congelado:** El emulador puede haberse atascado o tener un estado corrupto.
+    * **Solución:**
+        * Cierra el emulador y reinícialo.
+        * En el AVD Manager (`Tools` $\to$ `Device Manager` o `AVD Manager`), haz clic en la flecha hacia abajo junto a tu emulador y selecciona `Wipe Data` o `Cold Boot Now`. Si sigue fallando, prueba a crear un nuevo emulador.
+* **Versión de Android del Dispositivo/Emulador Incompatible:** La versión de Android de tu dispositivo o emulador es demasiado baja para el `minSdkVersion` de tu proyecto, o demasiado alta para alguna restricción inusual.
+    * **Solución:** Verifica tu `build.gradle (Module: app)` y asegúrate de que el `minSdkVersion` sea compatible con el dispositivo de destino. O usa un dispositivo/emulador con una versión de Android adecuada.
+* **Aplicación con el mismo Package Name ya Instalada (y firmada diferente):** Si ya tienes una versión de la app instalada en el dispositivo/emulador con el mismo `applicationId` pero fue firmada con otra key (por ejemplo, una versión de producción), no se puede sobrescribir.
+    * **Solución:** Desinstala manualmente la aplicación del dispositivo/emulador y luego intenta instalar de nuevo.
+
+### 2. Problemas Temporales con Android Studio/ADB
+
+* **ADB Stuck:** El `Android Debug Bridge` (ADB) a veces se queda en un estado inconsistente.
+    * **Solución:**
+        1.  Ve a `File` $\to$ `Invalidate Caches / Restart...`. Selecciona "Invalidate and Restart".
+        2.  Si eso no funciona, reinicia Android Studio completamente.
+        3.  Puedes probar a reiniciar el servidor ADB manualmente:
+            * Abre una terminal (en Android Studio: `View` $\to$ `Tool Windows` $\to;`Terminal`)
+            * Escribe `adb kill-server`
+            * Luego escribe `adb start-server`
+            * Intenta ejecutar la app de nuevo.
+
+### 3. Configuraciones Específicas del Proyecto
+
+* **Instalación Rápida (Instant Run/Apply Changes):** A veces, las características de instalación rápida de Android Studio pueden causar problemas.
+    * **Solución:** Desactiva "Apply Changes" temporalmente si está habilitado, o realiza una limpieza completa del proyecto (`Build` $\to$ `Clean Project`) y luego `Rebuild Project`.
+
+---
+
+## Qué hacer ahora:
+
+1.  **Reinicia el Emulador/Dispositivo:** Si es un emulador, ciérralo y vuelve a abrirlo. Si es un dispositivo físico, desconéctalo, vuelve a conectarlo y asegúrate de que la depuración USB esté autorizada.
+2.  **Limpia y reconstruye el proyecto:** `Build` $\to$ `Clean Project`, y luego `Build` $\to$ `Rebuild Project`.
+3.  **Reinicia Android Studio:** `File` $\to$ `Invalidate Caches / Restart...` y selecciona "Invalidate and Restart".
+
+**Mi apuesta principal es el emulador corrupto o la falta de autorización USB.** Intenta estas soluciones y cuéntame si alguna funciona.
+

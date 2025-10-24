@@ -1,0 +1,265 @@
+
+Este ejemplo utiliza el método **`registerForActivityResult`** (introducido en el SDK 30 y preferido sobre `onRequestPermissionsResult` para Android moderno) y emplea la **lógica condicional** para decidir qué permisos solicitar.
+
+-----
+
+## 1\. `AndroidManifest.xml` (Declaración de Permisos) ⚙️
+
+Declaramos los permisos en el manifiesto, sabiendo que en SDK 33 son permisos de tiempo de ejecución y deben ser solicitados al usuario.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TuProyectoPermisos">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+-----
+
+## 2\. `res/layout/activity_main.xml` (Layout) 🎨
+
+Un layout simple con un botón para iniciar la solicitud y un área de texto para mostrar el estado de cada permiso.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/textView_status_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Estado Actual de Permisos (SDK 33):"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/textView_camera_status"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="CÁMARA: Pendiente"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/textView_status_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/textView_audio_status"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="AUDIO: Pendiente"
+        android:layout_marginTop="8dp"
+        app:layout_constraintTop_toBottomOf="@+id/textView_camera_status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <Button
+        android:id="@+id/button_request_permissions"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Solicitar Permisos Faltantes"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@+id/textView_audio_status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+-----
+
+## 3\. `MainActivity.java` (Lógica de Permisos Moderna) 💻
+
+Utilizaremos `ActivityResultLauncher` para manejar la solicitud de permisos, el mecanismo recomendado en las APIs más recientes.
+
+```java
+package com.curso.ejemplo10manejopermisos;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+public class MainActivity extends AppCompatActivity {
+    
+    private static final String TAG = "PermissionHandler";
+    
+    // Lista de permisos que queremos gestionar
+    private final String[] REQUIRED_PERMISSIONS = new String[]{
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+    };
+    
+    // Componentes de la UI
+    private TextView tvCameraStatus, tvAudioStatus;
+    private Button btnRequestPermissions;
+
+    // ActivityResultLauncher para manejar la solicitud de permisos
+    private ActivityResultLauncher<String[]> requestPermissionsLauncher;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        tvCameraStatus = findViewById(R.id.textView_camera_status);
+        tvAudioStatus = findViewById(R.id.textView_audio_status);
+        btnRequestPermissions = findViewById(R.id.button_request_permissions);
+
+        // 1. Inicializar el ActivityResultLauncher
+        setupPermissionsLauncher();
+        
+        // 2. Revisar el estado inicial de los permisos
+        checkAndDisplayPermissions();
+
+        // 3. Configurar el Listener del botón
+        btnRequestPermissions.setOnClickListener(v -> handlePermissionRequest());
+    }
+
+    /**
+     * Configura el lanzador de resultados para manejar la respuesta del diálogo de permisos.
+     */
+    private void setupPermissionsLauncher() {
+        requestPermissionsLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            (Map<String, Boolean> results) -> {
+                // El Map 'results' contiene el resultado (true/false) para cada permiso solicitado
+                
+                // Recorremos los resultados y actualizamos la UI
+                for (Map.Entry<String, Boolean> entry : results.entrySet()) {
+                    String permission = entry.getKey();
+                    boolean isGranted = entry.getValue();
+
+                    if (permission.equals(Manifest.permission.CAMERA)) {
+                        updateStatus(tvCameraStatus, "CÁMARA", isGranted);
+                    } else if (permission.equals(Manifest.permission.RECORD_AUDIO)) {
+                        updateStatus(tvAudioStatus, "AUDIO", isGranted);
+                    }
+                }
+                
+                // Mensaje final de resumen
+                boolean allGranted = areAllPermissionsGranted();
+                if (allGranted) {
+                    Toast.makeText(this, "Todos los permisos concedidos. ✅", Toast.LENGTH_SHORT).show();
+                    btnRequestPermissions.setEnabled(false);
+                } else {
+                    Toast.makeText(this, "Algunos permisos fueron denegados. ⚠️", Toast.LENGTH_LONG).show();
+                    btnRequestPermissions.setEnabled(true);
+                }
+            }
+        );
+    }
+    
+    /**
+     * Identifica los permisos faltantes y lanza el diálogo de solicitud.
+     */
+    private void handlePermissionRequest() {
+        // 1. Identificar qué permisos faltan
+        List<String> permissionsToRequest = new ArrayList<>();
+        
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission);
+            }
+        }
+        
+        // 2. Si hay permisos faltantes, lanzamos la solicitud
+        if (!permissionsToRequest.isEmpty()) {
+            // Convertir la lista a un array para el launcher
+            String[] arrayToRequest = permissionsToRequest.toArray(new String[0]);
+            
+            // Lanzar la solicitud de permisos
+            requestPermissionsLauncher.launch(arrayToRequest);
+        } else {
+            Toast.makeText(this, "Todos los permisos ya están concedidos. 👍", Toast.LENGTH_SHORT).show();
+            btnRequestPermissions.setEnabled(false);
+        }
+    }
+    
+    /**
+     * Revisa el estado actual de todos los permisos y actualiza la UI al inicio.
+     */
+    private void checkAndDisplayPermissions() {
+        boolean cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        boolean audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+
+        updateStatus(tvCameraStatus, "CÁMARA", cameraGranted);
+        updateStatus(tvAudioStatus, "AUDIO", audioGranted);
+        
+        if (cameraGranted && audioGranted) {
+            btnRequestPermissions.setEnabled(false);
+            Log.d(TAG, "Todos los permisos ya concedidos.");
+        } else {
+            btnRequestPermissions.setEnabled(true);
+        }
+    }
+
+    /**
+     * Helper: Actualiza el texto del TextView según el estado del permiso.
+     */
+    private void updateStatus(TextView textView, String name, boolean isGranted) {
+        if (isGranted) {
+            textView.setText(name + ": CONCEDIDO ✅");
+            textView.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
+        } else {
+            textView.setText(name + ": DENEGADO ❌");
+            textView.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+        }
+    }
+    
+    /**
+     * Helper: Verifica si todos los permisos requeridos han sido concedidos.
+     */
+    private boolean areAllPermissionsGranted() {
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+```
