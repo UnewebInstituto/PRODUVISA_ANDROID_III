@@ -1,0 +1,407 @@
+Ejemplo completo para manejar el **GPS (Geolocalización)** utilizando la API moderna y recomendada: **`FusedLocationProviderClient`** de Google Play Services.
+
+Este ejemplo permite al usuario solicitar permisos y obtener actualizaciones de su **Latitud** y **Longitud**.
+
+-----
+
+## 1\. Configuración del Proyecto y Dependencias 🛠️
+
+### 1.1. Dependencia (`build.gradle` - Nivel Módulo: app)
+
+Debes asegurarte de tener la librería de servicios de ubicación:
+
+```gradle
+dependencies {
+    // ... otras dependencias
+    implementation 'com.google.android.gms:play-services-location:21.0.1' // Versión recomendada
+}
+```
+
+*************
+Instalar dependencias como `implementation 'com.google.android.gms:play-services-location:21.0.1'` es un proceso fundamental en Android Studio.
+
+Estas dependencias le indican al sistema de compilación de Android (Gradle) qué librerías externas debe incluir y enlazar con tu proyecto.
+
+Aquí tienes los pasos exactos y el lugar donde debes colocar esa línea de código:
+
+-----
+
+## 🛠️ Pasos para Instalar Dependencias en Android Studio
+
+La instalación se realiza editando el archivo de configuración **`build.gradle`** que corresponde a tu módulo de aplicación.
+
+### 1\. Localiza el Archivo `build.gradle` (Module: app)
+
+1.  En la ventana de proyecto de Android Studio, asegúrate de que la vista esté configurada como **"Android"** (generalmente está en la esquina superior izquierda de la ventana del proyecto).
+
+2.  Expande la carpeta de tu aplicación, generalmente llamada **`app`**.
+
+3.  Busca y abre el archivo llamado **`build.gradle`** que aparece bajo la etiqueta **`(Module :app)`**.
+
+    > **Nota Importante:** Hay dos archivos `build.gradle`. Debes usar el que está dentro de la carpeta del módulo de la aplicación (el más grande), **NO** el que está en la raíz del proyecto.
+
+### 2\. Añade la Dependencia
+
+1.  Dentro del archivo `build.gradle` (Module: app), desplázate hasta el bloque **`dependencies { ... }`**.
+2.  Copia y pega la línea de la dependencia dentro de ese bloque.
+
+**Ejemplo de cómo se vería el archivo:**
+
+```gradle
+// build.gradle (Module: app)
+
+android {
+    // ... configuraciones de compilación ...
+}
+
+dependencies {
+    // Dependencias básicas de Kotlin/Java y la UI
+    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // -------------------------------------------------------------------
+    // AÑADE TU DEPENDENCIA AQUÍ
+    // Para la ubicación (GPS)
+    implementation 'com.google.android.gms:play-services-location:21.0.1' 
+    // -------------------------------------------------------------------
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+```
+
+### 3\. Sincroniza el Proyecto (Sync Now) 🔄
+
+Una vez que guardes el archivo (`Ctrl+S` o `Cmd+S`), Android Studio detectará los cambios.
+
+1.  Aparecerá una barra amarilla en la parte superior del editor con el mensaje: **"A Gralde file has changed since last project sync. Open File / Sync Now"**.
+2.  Haz clic en el enlace **"Sync Now"**.
+
+Gradle descargará la librería de los servidores de Google y la integrará en tu proyecto, permitiéndote usar clases como **`FusedLocationProviderClient`** y **`LocationRequest`** en tu código Java.
+
+**¡Y eso es todo\!** La dependencia estará instalada y lista para usarse.
+
+
+*************
+
+
+-----
+
+### 1.2. `AndroidManifest.xml` (Permisos Necesarios) 📍
+
+Necesitas los permisos de **Ubicación** en primer plano (`FINE` y `COARSE`).
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <application
+        ...
+        >
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+-----
+
+## 2\. Layout XML: `activity_main.xml` 📱
+
+El layout contendrá campos para el estado de la ubicación y las coordenadas (Latitud/Longitud), más un botón para iniciar/detener la obtención de datos.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/text_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Estado: Pendiente de Permisos"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Latitud:"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/text_latitude"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0.0"
+        android:textSize="24sp"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Longitud:"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/text_longitude"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0.0"
+        android:textSize="24sp"
+        android:layout_marginBottom="32dp"/>
+
+    <Button
+        android:id="@+id/btn_toggle_updates"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Iniciar Monitoreo GPS"
+        android:enabled="false"/>
+
+</LinearLayout>
+```
+
+-----
+
+## 3\. Código Java: `MainActivity.java` 💻
+
+El código maneja la solicitud de permisos, inicializa el cliente de ubicación (`FusedLocationProviderClient`) y gestiona las peticiones de actualización de la ubicación.
+
+```java
+package com.ejemplo.manejogps;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.os.Bundle;
+import android.os.Looper;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+
+import java.util.Map;
+import java.util.Locale;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "GPSHandler";
+    private TextView textStatus, textLatitude, textLongitude;
+    private Button btnToggleUpdates;
+
+    // Clases principales de la API de ubicación
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationRequest locationRequest;
+    private LocationCallback locationCallback;
+    
+    private boolean requestingLocationUpdates = false;
+
+    // Permisos requeridos
+    private final String[] LOCATION_PERMISSIONS = {
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+    };
+    
+    private ActivityResultLauncher<String[]> requestPermissionsLauncher;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Inicialización de Views
+        textStatus = findViewById(R.id.text_status);
+        textLatitude = findViewById(R.id.text_latitude);
+        textLongitude = findViewById(R.id.text_longitude);
+        btnToggleUpdates = findViewById(R.id.btn_toggle_updates);
+
+        // Inicialización del cliente de ubicación
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+        // 1. Configurar el LocationRequest (Define cómo queremos las actualizaciones)
+        createLocationRequest();
+        
+        // 2. Configurar el LocationCallback (Maneja las actualizaciones recibidas)
+        createLocationCallback();
+
+        // 3. Configurar el Launcher de Permisos
+        setupPermissionLauncher();
+        
+        // 4. Configurar el botón
+        btnToggleUpdates.setOnClickListener(v -> toggleLocationUpdates());
+        
+        // 5. Verificar permisos al inicio
+        checkPermissionsAndSetup();
+    }
+    
+    // ---------------------- CONFIGURACIÓN DE UBICACIÓN ----------------------
+    
+    private void createLocationRequest() {
+        locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000) // Alta precisión, intervalo de 5 segundos
+                .setWaitForAccurateLocation(true) // Esperar hasta que haya una ubicación precisa
+                .setMinUpdateIntervalMillis(3000) // Intervalo mínimo de 3 segundos
+                .setMaxUpdateAgeMillis(10000) // No usar ubicaciones con más de 10 segundos
+                .build();
+    }
+
+    private void createLocationCallback() {
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                // Manejar cada nueva ubicación
+                for (Location location : locationResult.getLocations()) {
+                    updateUI(location);
+                }
+            }
+        };
+    }
+    
+    // ---------------------- GESTIÓN DE PERMISOS ----------------------
+
+    private void setupPermissionLauncher() {
+        requestPermissionsLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            permissions -> {
+                boolean fineLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+                boolean coarseLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
+
+                if (fineLocationGranted || coarseLocationGranted) {
+                    // Permiso concedido
+                    textStatus.setText("Estado: Permiso Concedido. Listo.");
+                    btnToggleUpdates.setEnabled(true);
+                    Toast.makeText(this, "Permisos de ubicación concedidos. ✅", Toast.LENGTH_SHORT).show();
+                } else {
+                    // Permiso denegado
+                    textStatus.setText("Estado: Permiso Denegado.");
+                    btnToggleUpdates.setEnabled(false);
+                    btnToggleUpdates.setText("Permiso Requerido");
+                    Toast.makeText(this, "Permiso de ubicación denegado. ❌", Toast.LENGTH_LONG).show();
+                }
+            }
+        );
+    }
+    
+    private boolean checkLocationPermissions() {
+        boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        return fine || coarse;
+    }
+
+    private void checkPermissionsAndSetup() {
+        if (checkLocationPermissions()) {
+            textStatus.setText("Estado: Permiso Concedido. Listo.");
+            btnToggleUpdates.setEnabled(true);
+        } else {
+            requestPermissionsLauncher.launch(LOCATION_PERMISSIONS);
+        }
+    }
+    
+    // ---------------------- INICIO/PARADA DE ACTUALIZACIONES ----------------------
+
+    private void toggleLocationUpdates() {
+        if (requestingLocationUpdates) {
+            stopLocationUpdates();
+        } else {
+            startLocationUpdates();
+        }
+    }
+
+    private void startLocationUpdates() {
+        if (!checkLocationPermissions()) {
+            Toast.makeText(this, "Debe conceder permisos de ubicación.", Toast.LENGTH_SHORT).show();
+            requestPermissionsLauncher.launch(LOCATION_PERMISSIONS);
+            return;
+        }
+
+        fusedLocationClient.requestLocationUpdates(locationRequest,
+                locationCallback,
+                Looper.getMainLooper())
+                .addOnSuccessListener(aVoid -> {
+                    requestingLocationUpdates = true;
+                    btnToggleUpdates.setText("Detener Monitoreo GPS");
+                    textStatus.setText("Estado: Monitoreando...");
+                    Log.d(TAG, "Monitoreo iniciado.");
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "Error al iniciar monitoreo: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "Error al iniciar monitoreo", e);
+                });
+    }
+
+    private void stopLocationUpdates() {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+                .addOnSuccessListener(aVoid -> {
+                    requestingLocationUpdates = false;
+                    btnToggleUpdates.setText("Iniciar Monitoreo GPS");
+                    textStatus.setText("Estado: Monitoreo Detenido.");
+                    Log.d(TAG, "Monitoreo detenido.");
+                });
+    }
+
+    // ---------------------- ACTUALIZACIÓN DE LA INTERFAZ ----------------------
+    
+    private void updateUI(Location location) {
+        if (location != null) {
+            textLatitude.setText(String.format(Locale.getDefault(), "%.6f", location.getLatitude()));
+            textLongitude.setText(String.format(Locale.getDefault(), "%.6f", location.getLongitude()));
+        }
+    }
+
+    // ---------------------- CICLO DE VIDA ----------------------
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (checkLocationPermissions() && requestingLocationUpdates) {
+            startLocationUpdates();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (requestingLocationUpdates) {
+            // Detener las actualizaciones para ahorrar batería cuando la app no está en primer plano
+            stopLocationUpdates(); 
+        }
+    }
+}
+```

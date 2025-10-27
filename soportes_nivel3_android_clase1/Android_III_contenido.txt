@@ -12,5 +12,5 @@ Contenido del Curso de Android III:
 • Memoria Externa (Tarjeta SD)
 • Permisos en Android
 • Uso de Cámara, Video, Audio
-• Google Maps
+• Google Maps (Adaptado para OpenStreeMap https://www.openstreetmap.org)
 • GPS
