@@ -1,0 +1,48 @@
+Los archivos de fotos se guardan en el directorio de **almacenamiento interno y privado** de tu aplicación.
+
+Específicamente, la configuración en tu `file_paths.xml` mapea a la siguiente ruta dentro del sistema de archivos de Android:
+
+$$
+/data/data/TU\_NOMBRE\_DE\_PAQUETE/files/images/
+$$
+
+---
+
+## 🔑 Desglose del Directorio
+
+* **`/data/data/`**: Es la ubicación raíz donde Android almacena los datos de todas las aplicaciones instaladas.
+* **`TU_NOMBRE_DE_PAQUETE`**: Es el identificador único de tu aplicación (ejemplo: `com.curso.ejemplo11camaramemoriainterna`). Este subdirectorio es inaccesible para otras aplicaciones.
+* **`/files/`**: Este subdirectorio es la ubicación predeterminada a la que apunta la función `$Context.getFilesDir()$` en Java.
+* **`images/`**: Este es el subdirectorio que especificaste con el atributo `path="images/"` en tu etiqueta `<files-path>`.
+
+### Importancia de la Ubicación
+
+* **Privacidad:** Estos archivos son **privados** y solo pueden ser leídos o modificados por tu propia aplicación. No son visibles en las galerías de fotos del sistema ni accesibles a través de un explorador de archivos estándar de Android.
+* **Seguridad:** Al usar la memoria interna, **no necesitas solicitar permisos de almacenamiento peligrosos** (`WRITE_EXTERNAL_STORAGE` o `READ_EXTERNAL_STORAGE`), lo cual es una buena práctica.
+* **Ciclo de Vida:** Los archivos almacenados aquí se **eliminan automáticamente** cuando el usuario desinstala tu aplicación.
+
+Para acceder a estos archivos durante la depuración, debes usar la herramienta **Device File Explorer** en Android Studio.
+
+
+
+No, **no es posible** acceder a los archivos de fotos guardados en ese directorio ( `/data/data/TU_NOMBRE_DE_PAQUETE/files/images/`) **desde la aplicación de archivos o la galería estándar del teléfono**.
+
+---
+
+## 🔒 Razón de la Restricción
+
+La razón principal es que este directorio se encuentra en la **memoria de almacenamiento interno y privado** de tu aplicación.
+
+* **Aislamiento de Aplicaciones:** Android utiliza un sistema de aislamiento de seguridad donde los datos de una aplicación se mantienen separados de otras aplicaciones y del acceso directo del usuario. El directorio `/data/data/` está protegido por permisos del sistema.
+* **Archivos Temporales/Privados:** El directorio `$Context.getFilesDir()$` está destinado a almacenar datos privados y a menudo temporales que no necesitan ser compartidos o vistos por el usuario fuera de tu aplicación.
+
+## 💻 ¿Cómo Acceder a los Archivos?
+
+Para ver o recuperar las fotos, tienes dos opciones principales:
+
+1.  **Desde Android Studio (Recomendado para desarrollo):** Utiliza el **Device File Explorer** en Android Studio. Puedes navegar a `data > data > tu.nombre.de.paquete > files > images` y descargar los archivos a tu computadora.
+2.  **Desde la Aplicación (Para el usuario):** Si un usuario necesita ver, compartir o acceder a la foto fuera de tu aplicación, **debes implementar una función** dentro de tu código que:
+    * Copie el archivo de la memoria interna a la **Memoria Compartida** (como la carpeta **`Pictures`** o **`DCIM`**).
+    * O bien, muestre la imagen y ofrezca una función de "Compartir" (usando un `Intent` y un `FileProvider` similar al que usaste para la cámara).
+
+Si quieres que las fotos aparezcan en la galería, tendrías que cambiar la lógica de almacenamiento para usar la **Memoria Compartida (Shared Storage)** en lugar de la memoria interna.

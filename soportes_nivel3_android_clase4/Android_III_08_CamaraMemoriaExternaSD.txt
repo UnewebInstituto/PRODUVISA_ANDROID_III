@@ -1,0 +1,353 @@
+Este método es el más seguro y recomendado para el SDK 33, ya que **no requiere solicitar permisos de almacenamiento de tiempo de ejecución**. Solo necesitamos el permiso de la **CÁMARA**.
+
+-----
+
+## 1\. `AndroidManifest.xml` (Permisos y FileProvider) 📸
+
+Necesitamos el permiso `CAMERA` y configurar el `FileProvider` para compartir de forma segura la ruta de nuestro archivo temporal con la aplicación de cámara.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TuProyectoCamaraExterna">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+-----
+
+## 2\. `res/xml/file_paths.xml` (Rutas del FileProvider) 🛠️
+
+Este archivo permite que el `FileProvider` acceda a las rutas de almacenamiento externo que genera `getExternalFilesDir()`.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-files-path name="my_images" path="Pictures/" />
+</paths>
+```
+
+-----
+
+## 3\. `res/layout/activity_main.xml` (Layout de Interfaz) 🖼️
+
+Un diseño simple con un botón para tomar la foto y un `ImageView` para mostrar la miniatura.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http:š//schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <ImageView
+        android:id="@+id/imageView_foto"
+        android:layout_width="250dp"
+        android:layout_height="250dp"
+        android:layout_marginTop="32dp"
+        android:background="#CCCCCC"
+        android:scaleType="centerCrop"
+        android:contentDescription="Miniatura de la foto guardada externamente"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/button_tomar_foto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="Tomar Foto (SD Externa)"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/imageView_foto" />
+
+    <TextView
+        android:id="@+id/textView_path"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="16dp"
+        android:text="Ruta: Pendiente"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_tomar_foto" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+-----
+
+## 4\. `MainActivity.java` (Lógica de Java - SDK 33) 💻
+
+La lógica se centra en solicitar el permiso de `CAMERA` y usar **`getExternalFilesDir(Environment.DIRECTORY_PICTURES)`** para asegurar el almacenamiento.
+
+```java
+package com.curso.ejemplo11camaraexterna;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+public class MainActivity extends AppCompatActivity {
+    
+    private static final String TAG = "CameraExternal";
+    
+    private ImageView imageViewFoto;
+    private Button buttonTomarFoto;
+    private TextView textViewPath;
+    
+    private String currentPhotoPath; // Ruta del archivo en el almacenamiento externo privado
+    private Uri photoURI; // URI del FileProvider
+
+    // Launcher para la solicitud del permiso de la Cámara
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+
+    // Launcher para la actividad de la Cámara
+    private ActivityResultLauncher<Intent> takePictureLauncher;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        imageViewFoto = findViewById(R.id.imageView_foto);
+        buttonTomarFoto = findViewById(R.id.button_tomar_foto);
+        textViewPath = findViewById(R.id.textView_path);
+
+        // 1. Inicializar los ActivityResultLaunchers
+        setupLaunchers();
+        
+        // 2. Manejar el click del botón
+        buttonTomarFoto.setOnClickListener(v -> handleCameraAction());
+        
+        // 3. Revisar el estado inicial para actualizar el texto del botón
+        updateButtonTextAndToast();
+    }
+    
+    // ---------------------- CONFIGURACIÓN DE LAUNCHERS ----------------------
+
+    private void setupLaunchers() {
+        
+        // A. Launcher para solicitar el permiso de CÁMARA
+        requestPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(),
+            isGranted -> {
+                if (isGranted) {
+                    // ÉXITO: Actualizar UI y proceder inmediatamente con la cámara
+                    buttonTomarFoto.setText("Tomar Foto (SD Externa)");
+                    Toast.makeText(this, "Permisos concedidos. Intenta tomar la foto. ✅", Toast.LENGTH_SHORT).show();
+                    dispatchTakePictureIntent(); 
+                } else {
+                    // DENEGADO: Actualizar UI y mostrar error
+                    buttonTomarFoto.setText("Permiso Denegado: Reintentar");
+                    Toast.makeText(this, "La aplicación necesita permisos para funcionar. ❌", Toast.LENGTH_LONG).show();
+                }
+            }
+        );
+
+        // B. Launcher para la actividad de la CÁMARA
+        takePictureLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    if (currentPhotoPath != null) {
+                        setPic(); 
+                        textViewPath.setText("Ruta Guardada: " + currentPhotoPath);
+                        Toast.makeText(this, "Foto guardada en Almacenamiento Externo (Privado).", Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    Toast.makeText(this, "Captura de foto cancelada o fallida.", Toast.LENGTH_SHORT).show();
+                    // Limpiar la ruta si la captura fue cancelada o falló
+                    currentPhotoPath = null;
+                    photoURI = null;
+                }
+            }
+        );
+    }
+    
+    // ---------------------- GESTIÓN DEL FLUJO DE PERMISOS ----------------------
+    
+    /**
+     * Función para mostrar el estado inicial y verificar si el permiso está dado.
+     */
+    private void updateButtonTextAndToast() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+             buttonTomarFoto.setText("Solicitar Permiso de Cámara");
+             // Toast.makeText(this, "Aún no se han concedido los permisos necesarios. ❌", Toast.LENGTH_LONG).show();
+        } else {
+             buttonTomarFoto.setText("Tomar Foto (SD Externa)");
+        }
+    }
+
+    /**
+     * Función central de acción: verifica el permiso antes de intentar abrir la cámara.
+     */
+    private void handleCameraAction() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            // Permiso concedido: Continuar con la acción de la cámara
+            dispatchTakePictureIntent();
+        } else {
+            // Permiso no concedido: Lanzar el diálogo de solicitud
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
+        }
+    }
+    
+    // ---------------------- LÓGICA DE LA CÁMARA Y ARCHIVOS ----------------------
+
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+
+            File photoFile = null;
+            try {
+                // 1. Crea el archivo de destino en el almacenamiento externo (privado de la app)
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                Log.e(TAG, "Error al crear el archivo de imagen: " + ex.getMessage());
+                Toast.makeText(this, "Error al crear archivo de imagen", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (photoFile != null) {
+                // 2. Obtener un URI seguro usando FileProvider
+                photoURI = FileProvider.getUriForFile(
+                        this,
+                        getApplicationContext().getPackageName() + ".fileprovider",
+                        photoFile
+                );
+                
+                // 3. Conceder permisos temporales de lectura/escritura a la app de cámara
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                
+                // 4. Pasar la URI a la app de cámara para que guarde la foto
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                
+                // 5. Lanzar la cámara
+                takePictureLauncher.launch(takePictureIntent);
+            }
+        } else {
+            // Este Toast puede aparecer en AVDs sin app de cámara configurada
+            Toast.makeText(this, "No hay aplicación de cámara disponible", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Crea un archivo JPEG con timestamp en el directorio Pictures del almacenamiento EXTERNO
+     * (Carpeta privada de la app: /Android/data/tu.paquete/files/Pictures/).
+     */
+    private File createImageFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+
+        // USANDO getExternalFilesDir(Environment.DIRECTORY_PICTURES) 
+        // NO REQUIERE PERMISO DE ALMACENAMIENTO
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        
+        if (storageDir == null) {
+             throw new IOException("No se puede acceder al almacenamiento externo para imágenes.");
+        }
+        
+        if (!storageDir.exists()) {
+            storageDir.mkdirs();
+        }
+
+        File image = File.createTempFile(
+                imageFileName,  
+                ".jpg",         
+                storageDir      
+        );
+
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
+    // ---------------------- REDIMENSIONAMIENTO DE IMAGEN ----------------------
+
+    /**
+     * Carga la imagen desde la ruta externa, la redimensiona para la miniatura y la muestra.
+     */
+    private void setPic() {
+        if (currentPhotoPath == null) return;
+
+        // Determinar el tamaño del ImageView (usar 250 si aún no tiene dimensiones)
+        int targetW = imageViewFoto.getWidth() > 0 ? imageViewFoto.getWidth() : 250;
+        int targetH = imageViewFoto.getHeight() > 0 ? imageViewFoto.getHeight() : 250;
+
+        // Opciones de decodificación para obtener dimensiones sin cargar el bitmap completo
+        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+        bmOptions.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(currentPhotoPath, bmOptions);
+        int photoW = bmOptions.outWidth;
+        int photoH = bmOptions.outHeight;
+
+        // Determinar el factor de escala
+        int scaleFactor = Math.min(photoW/targetW, photoH/targetH);
+
+        // Decodificar el bitmap final con el factor de escala
+        bmOptions.inJustDecodeBounds = false;
+        bmOptions.inSampleSize = scaleFactor;
+
+        Bitmap bitmap = BitmapFactory.decodeFile(currentPhotoPath, bmOptions);
+        imageViewFoto.setImageBitmap(bitmap);
+    }
+}
+```

@@ -1,0 +1,177 @@
+Ejemplo para incluir el manejo del zoom programático y los controles de interacción del usuario, como solicitaste.
+
+Usaremos la librería **OSMDroid** (OpenStreetMap) como el componente de mapa, que es la más común en Android Studio/Java para mapas sin necesidad de una clave de API de Google.
+
+A continuación, se encuentran todos los componentes necesarios, incluyendo el código actualizado de `MainActivity.java` que implementa las consideraciones de zoom.
+
+-----
+
+## 1\. Configuración del Proyecto 🛠️
+
+### 1.1. Dependencias (`build.gradle` - Módulo: app)
+
+Asegúrate de tener la librería de OSMDroid. Si no la tienes, añádela a tu bloque `dependencies { ... }`:
+
+```gradle
+dependencies {
+    // ... otras dependencias
+    implementation 'org.osmdroid:osmdroid-android:6.1.18' // Versión actual de OSMDroid
+}
+```
+
+### 1.2. `AndroidManifest.xml` (Permisos) 📍
+
+Necesitas permisos de **Internet** (para cargar los tiles del mapa), **Estado de Red** y, opcionalmente, **Almacenamiento** (para cachear los mapas).
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
+    <application
+        ...
+        android:requestLegacyExternalStorage="true"
+        android:hardwareAccelerated="true">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+-----
+
+## 2\. Layout XML: `activity_main.xml` 📱
+
+El layout solo necesita un componente `MapView`.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <org.osmdroid.views.MapView
+        android:id="@+id/map_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</RelativeLayout>
+```
+
+-----
+
+## 3\. Código Java: `MainActivity.java` 💻
+
+Este código incluye la inicialización del mapa, la configuración del controlador, la habilitación de los gestos táctiles y, lo más importante, las líneas para el **zoom inicial** y los **controles de zoom de la UI**.
+
+package com.ejemplo.osmdroidzoom;
+
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import org.osmdroid.config.Configuration;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapController;
+import org.osmdroid.views.MapView;
+
+public class MainActivity extends AppCompatActivity {
+
+    private MapView map;
+    private MapController mapController;
+    
+    // Coordenadas de ejemplo (Caracas, Venezuela)
+    private static final double LATITUD_INICIAL = 10.4806;
+    private static final double LONGITUD_INICIAL = -66.9036;
+
+    // Nivel de zoom inicial (ej: 15.0 para vista de calle/barrio)
+    private static final double ZOOM_INICIAL = 15.0; 
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        
+        // 1. IMPORTANTE: Inicializar la configuración de OSMDroid
+        // Esto debe hacerse ANTES de llamar a setContentView.
+        Configuration.getInstance().load(getApplicationContext(),
+                PreferenceManager.getDefaultSharedPreferences(getApplicationContext()));
+
+        setContentView(R.layout.activity_main);
+
+        // 2. Obtener la referencia del MapView
+        map = findViewById(R.id.map_view);
+
+        // 3. HABILITAR CONTROLES DE ZOOM TÁCTILES Y DE LA UI
+        
+        // A. Habilita el zoom con gestos de pinza y rotación del mapa
+        map.setMultiTouchControls(true); 
+        
+        // B. Muestra los botones de zoom (+ y -) en la esquina de la pantalla
+        map.setBuiltInZoomControls(true); 
+
+        // 4. Inicializar el controlador del mapa
+        mapController = (MapController) map.getController();
+
+        // 5. CONFIGURACIÓN DE ZOOM PROGRAMÁTICO
+        
+        // A. Definir el nivel de zoom inicial
+        mapController.setZoom(ZOOM_INICIAL); 
+
+        // B. Definir el punto central inicial
+        GeoPoint startPoint = new GeoPoint(LATITUD_INICIAL, LONGITUD_INICIAL);
+        mapController.setCenter(startPoint); 
+        
+        // Opcional: Establecer límites de zoom
+        // CORRECCIÓN: Se usa map.getZoomLevelDouble() para obtener el nivel de zoom
+        mapController.setZoom(map.getZoomLevelDouble()); // <-- LÍNEA CORREGIDA
+        map.setMinZoomLevel(5.0);
+        map.setMaxZoomLevel(20.0);
+    }
+    
+    
+    // ---------------------- CICLO DE VIDA DEL MAPA ----------------------
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Carga los tiles del mapa
+        if (map != null) {
+            map.onResume(); 
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Pausa la carga de tiles para ahorrar recursos
+        if (map != null) {
+            map.onPause(); 
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Limpia el mapa
+        if (map != null) {
+            map.onDetach();
+        }
+    }
+}
+
+Con este código, el mapa se inicializará automáticamente en el nivel **`15.0`** centrado en las coordenadas definidas, y el usuario podrá interactuar con él usando los **botones de zoom (+/-)** y el **gesto de pinza** en el emulador.

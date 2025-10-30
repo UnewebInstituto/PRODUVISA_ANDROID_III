@@ -1,0 +1,342 @@
+La diferencia fundamental con la memoria interna es que, para acceder a la memoria externa, necesitamos solicitar permisos de almacenamiento (aunque esto ha cambiado desde Android 10, usaremos el método recomendado para asegurar la compatibilidad y la ruta correcta). Utilizaremos el directorio público **`Environment.DIRECTORY_MOVIES`**.
+
+-----
+
+## 1\. Configuración del Proyecto y Permisos
+
+### 1.1. `AndroidManifest.xml` (Permisos y FileProvider) 📸
+
+Para grabar y guardar en la Memoria Externa compartida (el directorio `Movies`), necesitamos:
+
+1.  El permiso `CAMERA`.
+2.  El permiso `WRITE_EXTERNAL_STORAGE` (aunque solo es necesario hasta API 28, lo incluimos para asegurar la compatibilidad con el código que accede a la ruta pública).
+3.  Configurar el `FileProvider` con la ruta externa adecuada.
+
+<!-- end list -->
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    
+    <application
+        ...
+        android:requestLegacyExternalStorage="true"
+        ...>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+-----
+
+### 1.2. `res/xml/file_paths.xml` (Rutas del FileProvider) 🛠️
+
+Para acceder al directorio **`Movies`** de la memoria externa, usamos la etiqueta `<external-path>`.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path name="my_external_videos" path="." />
+</paths>
+```
+
+-----
+
+## 2\. Interfaz de Usuario
+
+El layout XML es idéntico al de la memoria interna, ya que solo cambia la lógica de guardado en Java.
+
+### 2.1. `res/layout/activity_main.xml` (Layout de Interfaz) 🖼️
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <Button
+        android:id="@+id/button_grabar_video"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Grabar Video (Memoria Externa)"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/textView_path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ruta: Pendiente"
+        android:layout_marginBottom="8dp"/>
+
+    <VideoView
+        android:id="@+id/video_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_gravity="center"
+        android:background="#CCCCCC"/>
+
+</LinearLayout>
+```
+
+-----
+
+## 3\. Lógica Java
+
+### 3.1. `MainActivity.java` (Lógica de Java - Memoria Externa) 💻
+
+La **clave del cambio** se encuentra en el método `createVideoFile()`, donde se utiliza `Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)` para acceder al directorio público de películas.
+
+```java
+package com.curso.ejemplo14cameravideoexterna;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment; // CLAVE
+import android.provider.MediaStore;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.MediaController;
+import android.widget.Toast;
+import android.widget.VideoView;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+public class MainActivity extends AppCompatActivity {
+    
+    private static final String TAG = "CameraVideoExternal";
+    private Button buttonGrabarVideo;
+    private TextView textViewPath;
+    private VideoView videoView;
+    
+    private String currentVideoPath; // Ruta absoluta del archivo
+    private Uri videoURI; // URI seguro de FileProvider
+
+    // Solicitamos dos permisos, por lo que usamos RequestMultiplePermissions
+    private ActivityResultLauncher<String[]> requestPermissionsLauncher;
+    private ActivityResultLauncher<Intent> takeVideoLauncher;
+
+    // Array de permisos que necesitamos
+    private final String[] REQUIRED_PERMISSIONS = {
+        Manifest.permission.CAMERA,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE // Para versiones anteriores a Android 10
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        buttonGrabarVideo = findViewById(R.id.button_grabar_video);
+        textViewPath = findViewById(R.id.textView_path);
+        videoView = findViewById(R.id.video_view);
+
+        setupLaunchers();
+        buttonGrabarVideo.setOnClickListener(v -> handleCameraAction());
+        updateButtonTextAndToast();
+    }
+    
+    // ---------------------- CONFIGURACIÓN DE LAUNCHERS ----------------------
+
+    private void setupLaunchers() {
+        
+        // A. Launcher para solicitar los permisos (Cámara y Almacenamiento)
+        requestPermissionsLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            permissions -> {
+                boolean allGranted = true;
+                for (String permission : REQUIRED_PERMISSIONS) {
+                    if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                
+                if (allGranted) {
+                    buttonGrabarVideo.setText("Grabar Video (Memoria Externa)");
+                    Toast.makeText(this, "Permisos concedidos. Abriendo cámara... ✅", Toast.LENGTH_SHORT).show();
+                    dispatchTakeVideoIntent(); 
+                } else {
+                    buttonGrabarVideo.setText("Permiso Denegado: Reintentar");
+                    Toast.makeText(this, "Permisos necesarios denegados. ❌", Toast.LENGTH_LONG).show();
+                }
+            }
+        );
+        
+        // B. Launcher para la actividad de la CÁMARA
+        takeVideoLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    if (currentVideoPath != null) {
+                        playVideo();
+                        textViewPath.setText("Ruta Guardada: " + currentVideoPath);
+                        Toast.makeText(this, "Video guardado en Memoria Externa.", Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    Toast.makeText(this, "Grabación de video cancelada o fallida.", Toast.LENGTH_SHORT).show();
+                    // Limpiar referencias si no se guardó el video
+                    currentVideoPath = null;
+                    videoURI = null;
+                }
+            }
+        );
+    }
+    
+    // ---------------------- GESTIÓN DEL FLUJO DE PERMISOS ----------------------
+    
+    private boolean checkAllPermissionsGranted() {
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void updateButtonTextAndToast() {
+        if (!checkAllPermissionsGranted()) {
+             buttonGrabarVideo.setText("Solicitar Permisos Necesarios");
+        } else {
+             buttonGrabarVideo.setText("Grabar Video (Memoria Externa)");
+        }
+    }
+
+    private void handleCameraAction() {
+        if (checkAllPermissionsGranted()) {
+            dispatchTakeVideoIntent();
+        } else {
+            requestPermissionsLauncher.launch(REQUIRED_PERMISSIONS);
+        }
+    }
+    
+    // ---------------------- LÓGICA DE LA CÁMARA Y ARCHIVOS ----------------------
+
+    private void dispatchTakeVideoIntent() {
+        Intent takeVideoIntent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
+        
+        if (takeVideoIntent.resolveActivity(getPackageManager()) != null) {
+
+            File videoFile = null;
+            try {
+                // 1. Crea el archivo de destino en la memoria EXTERNA (pública)
+                videoFile = createVideoFile();
+            } catch (IOException ex) {
+                Log.e(TAG, "Error al crear el archivo de video: " + ex.getMessage());
+                Toast.makeText(this, "Error al crear archivo de video", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (videoFile != null) {
+                // 2. Obtener un URI seguro usando FileProvider
+                videoURI = FileProvider.getUriForFile(
+                        this,
+                        getApplicationContext().getPackageName() + ".fileprovider",
+                        videoFile
+                );
+                
+                // 3. Conceder permisos temporales a la app de cámara
+                takeVideoIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                
+                // 4. Pasar la URI para que la cámara guarde el video
+                takeVideoIntent.putExtra(MediaStore.EXTRA_OUTPUT, videoURI);
+                
+                // 5. Lanzar la cámara
+                takeVideoLauncher.launch(takeVideoIntent);
+            }
+        } else {
+            Toast.makeText(this, "No hay aplicación de cámara disponible", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Crea un archivo MP4 con timestamp en el directorio /storage/emulated/0/Movies/
+     * (Memoria Externa / Almacenamiento Compartido).
+     */
+    private File createVideoFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String videoFileName = "VIDEO_" + timeStamp + "_";
+
+        // CAMBIO CLAVE: Usamos getExternalStoragePublicDirectory para el directorio público de Películas
+        // Este método está obsoleto, pero se utiliza para acceder a rutas públicas en versiones antiguas.
+        // En Android 10+ (API 29+), esto requiere MediaStore para ser estándar, pero este método funciona 
+        // con requestLegacyExternalStorage="true" para compatibilidad.
+        File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        
+        if (!storageDir.exists()) {
+            storageDir.mkdirs();
+        }
+
+        File video = File.createTempFile(
+                videoFileName,  
+                ".mp4",         
+                storageDir      
+        );
+        
+        currentVideoPath = video.getAbsolutePath();
+        return video;
+    }
+
+    // ---------------------- REPRODUCCIÓN DE VIDEO ----------------------
+
+    /**
+     * Carga el video desde la ruta externa y lo reproduce en el VideoView.
+     */
+    private void playVideo() {
+        if (videoURI == null) return;
+        
+        // 1. Establecer la URI segura del FileProvider en el VideoView
+        videoView.setVideoURI(videoURI);
+        
+        // 2. Añadir controles de reproducción
+        MediaController mediaController = new MediaController(this);
+        mediaController.setAnchorView(videoView);
+        videoView.setMediaController(mediaController);
+        
+        // 3. Iniciar la reproducción
+        videoView.start();
+    }
+}
+```
